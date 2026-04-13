@@ -1,0 +1,76 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: SelfHostedPool
+
+stages:
+
+  - stage: TerraformInit
+    displayName: 'Terraform Init'
+    jobs:
+      - job: Init
+        displayName: 'Initialize Terraform'
+        steps:
+          - checkout: self
+            displayName: 'Checkout infra repo'
+
+          - script: |
+              terraform version
+            displayName: 'Check Terraform version'
+
+          - script: |
+              terraform init
+            displayName: 'Terraform Init'
+            workingDirectory: $(System.DefaultWorkingDirectory)
+
+  - stage: TerraformPlan
+    displayName: 'Terraform Plan'
+    dependsOn: TerraformInit
+    jobs:
+      - job: Plan
+        displayName: 'Run Terraform Plan'
+        steps:
+          - checkout: self
+            displayName: 'Checkout infra repo'
+
+          - script: |
+              terraform init
+              terraform plan -out=tfplan
+            displayName: 'Terraform Plan'
+            workingDirectory: $(System.DefaultWorkingDirectory)
+
+          - publish: $(System.DefaultWorkingDirectory)/tfplan
+            artifact: tfplan
+            displayName: 'Publish plan artifact'
+
+  - stage: TerraformApply
+    displayName: 'Terraform Apply'
+    dependsOn: TerraformPlan
+    jobs:
+      - job: Apply
+        displayName: 'Run Terraform Apply'
+        steps:
+          - checkout: self
+            displayName: 'Checkout infra repo'
+
+          - download: current
+            artifact: tfplan
+            displayName: 'Download plan artifact'
+
+          - script: |
+              terraform init
+              terraform apply -auto-approve
+            displayName: 'Terraform Apply'
+            workingDirectory: $(System.DefaultWorkingDirectory)
+
+          - script: |
+              echo "##vso[task.setvariable variable=PUBLIC_IP;isOutput=true]$(terraform output -raw public_ip)"
+              echo "##vso[task.setvariable variable=DB_HOST;isOutput=true]$(terraform output -raw db_host)"
+              echo "Public IP: $(terraform output -raw public_ip)"
+              echo "DB Host: $(terraform output -raw db_host)"
+            displayName: 'Print Terraform Outputs'
+            workingDirectory: $(System.DefaultWorkingDirectory)
+            name: TerraformOutputs

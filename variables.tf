@@ -18,10 +18,6 @@ variable "admin_username" {
   default     = "ubuntu"
 }
 
-variable "admin_password" {
-  description = "VM admin password"
-  sensitive   = true
-}
 
 variable "db_name" {
   description = "Database name"
